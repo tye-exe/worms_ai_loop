@@ -1,0 +1,1 @@
+To build you need to add the windows 32bit target `i686-pc-windows-msvc` and then build the project with this target.
