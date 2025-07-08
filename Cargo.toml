@@ -1,5 +1,5 @@
 [package]
-name = "uno"
+name = "worms_ai_loop"
 version = "0.1.0"
 edition = "2024"
 
