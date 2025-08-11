@@ -4,6 +4,6 @@
 #[macro_export]
 macro_rules! pcstr {
     ($expr:expr) => {
-        windows::core::PCSTR::from_raw(::std::format!("{}{}", $expr, '\0').as_ptr())
+        windows::core::PCSTR::from_raw(Box::new(::std::format!("{}{}", $expr, '\0')).as_ptr())
     };
 }

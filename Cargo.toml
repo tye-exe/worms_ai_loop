@@ -12,4 +12,10 @@ simple-logging = "2.0.2"
 windows = { version = "0.61.3", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_SystemServices",
+    "Win32_UI_Input_KeyboardAndMouse",
 ] }
+
+# For GUI analyser
+eframe = "0.32.0"
+egui = "0.32.0"
+winit = "0.30.11"

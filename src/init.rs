@@ -8,11 +8,29 @@ const LOG_FILE: &str = "worms_ai_loop.log";
 /// - Logging
 pub fn init() {
     std::panic::set_hook(Box::new(|info| unsafe {
+        log::error!(
+            "Line: {}\nError: {}",
+            info.location()
+                .map(|a| a.to_string())
+                .unwrap_or("Unknown Location".to_owned()),
+            get_payload(info)
+        );
+
         let caption = pcstr!(concat!(
             "Unrecoverable error : ",
             std::env!("CARGO_PKG_NAME")
         ));
-        let text = pcstr!(get_payload(info));
+        let text = pcstr!(format!(
+            "Line: {}\nError: {}",
+            info.location()
+                .map(|a| a.to_string())
+                .unwrap_or("Unknown Location".to_owned()),
+            get_payload(info)
+        ));
+
+        //PCSTR
+
+        //let text = pcstr!("error text");
 
         MessageBoxA(None, text, caption, MB_ICONERROR);
 
@@ -24,12 +42,12 @@ pub fn init() {
 }
 
 /// See 'payload' in [std::panic::PanicHookInfo]
-fn get_payload<'a>(info: &'a std::panic::PanicHookInfo<'_>) -> &'a str {
+fn get_payload<'a>(info: &'a std::panic::PanicHookInfo<'_>) -> String {
     if let Some(s) = info.payload().downcast_ref::<&str>() {
-        s
+        s.to_owned().to_owned()
     } else if let Some(s) = info.payload().downcast_ref::<String>() {
-        s
+        s.to_owned()
     } else {
-        "Unknown reason"
+        "Unknown reason".to_owned()
     }
 }
