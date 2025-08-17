@@ -1,5 +1,7 @@
-use crate::pcstr;
-use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxA};
+use windows::{
+    Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxA},
+    core::{PCSTR, s},
+};
 
 const LOG_FILE: &str = "worms_ai_loop.log";
 
@@ -16,21 +18,19 @@ pub fn init() {
             get_payload(info)
         );
 
-        let caption = pcstr!(concat!(
-            "Unrecoverable error : ",
-            std::env!("CARGO_PKG_NAME")
-        ));
-        let text = pcstr!(format!(
-            "Line: {}\nError: {}",
+        // Has to be in a separate variable to work
+        let caption = concat!("Unrecoverable error : ", std::env!("CARGO_PKG_NAME"), "\0");
+        let caption = PCSTR(caption.as_ptr());
+
+        // Has to be in a separate variable to work
+        let text = format!(
+            "Line: {}\nError: {}\0",
             info.location()
                 .map(|a| a.to_string())
                 .unwrap_or("Unknown Location".to_owned()),
             get_payload(info)
-        ));
-
-        //PCSTR
-
-        //let text = pcstr!("error text");
+        );
+        let text = PCSTR(text.as_ptr());
 
         MessageBoxA(None, text, caption, MB_ICONERROR);
 

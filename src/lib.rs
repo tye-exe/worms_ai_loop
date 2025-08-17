@@ -1,6 +1,5 @@
 mod analyser;
 mod init;
-mod rt_pcstr;
 mod window;
 
 use std::os::raw::c_void;
@@ -24,7 +23,6 @@ extern "system" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _: *mut ()) 
     match call_reason {
         DLL_PROCESS_ATTACH => {
             init::init();
-            //attach();
             analyse();
         }
         DLL_PROCESS_DETACH => log::info!("Detach time"),
@@ -63,6 +61,8 @@ fn attach() {
 
         unsafe { SendMessageA(id, WM_LBUTTONDOWN, WPARAM(0 as usize), LPARAM(0isize)) };
         unsafe { SendMessageA(id, WM_LBUTTONUP, WPARAM(0 as usize), LPARAM(0isize)) };
+
+        // Dept 2, index 38 for team scroll
 
         log_child_windows(window_id);
     });
