@@ -1,14 +1,17 @@
 mod win_info;
 
 use super::window::get_windows;
-use crate::attach;
+use crate::{analyser::win_info::WinData, attach};
 use eframe::{App, EventLoopBuilderHook};
 use egui::{CentralPanel, Id, Layout, TopBottomPanel};
 use std::{thread, time::Duration};
 use windows::{
     Win32::{
         Foundation::{HWND, POINT},
-        UI::WindowsAndMessaging::{FindWindowA, GetCursorPos, GetWindowTextA},
+        UI::{
+            Input::KeyboardAndMouse::{GetKeyState, GetKeyboardState},
+            WindowsAndMessaging::{FindWindowA, GetCursorPos, GetWindowTextA},
+        },
     },
     core::s,
 };
@@ -48,6 +51,7 @@ pub fn analyse() {
     });
 }
 
+#[derive(Default)]
 struct MyApp {
     /// Window id of worms
     window_id: HWND,
@@ -57,8 +61,12 @@ struct MyApp {
     /// Show extra window information.
     show_info: bool,
 
-    cached_data: Option<win_info::WinData>,
-    tick: usize,
+    /// Window information
+    window_data: Cache<10, WinData>,
+
+    show_key_pressed: bool,
+    key_index_modal: bool,
+    keyboard_state: Cache<4, Vec<usize>>,
 }
 
 impl MyApp {
@@ -66,9 +74,7 @@ impl MyApp {
         Self {
             window_id,
             only_containing: true,
-            show_info: false,
-            cached_data: None,
-            tick: 0,
+            ..Default::default()
         }
     }
 }
@@ -78,6 +84,39 @@ impl App for MyApp {
         let mut cursor_pos = POINT::default();
         unsafe { GetCursorPos(&mut cursor_pos as *mut POINT) };
         let cursor_pos = cursor_pos;
+
+        let window_data = self
+            .window_data
+            .get(|| win_info::get_window_data(&get_windows(self.window_id)));
+
+        if self.show_key_pressed {
+            let pressed = self.keyboard_state.get(|| {
+                let state = unsafe {
+                    let mut state = [0u8; 256];
+                    GetKeyboardState(&mut state);
+                    state
+                };
+
+                state
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, key)| {
+                        if *key & 0b1000_0000 == 0 {
+                            return None;
+                        }
+                        Some(index)
+                    })
+                    .collect()
+            });
+
+            if pressed.len() != 0 || self.key_index_modal {
+                self.key_index_modal = egui::Modal::new("grrr".into())
+                    .show(ctx, |ui| {
+                        ui.label(format!("Key: {pressed:?}"));
+                    })
+                    .should_close();
+            }
+        }
 
         TopBottomPanel::top("tap").show(ctx, |ui| {
             ui.label(format!("Cursor Position: {cursor_pos:?}"));
@@ -93,20 +132,43 @@ impl App for MyApp {
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            let window_data = match (&self.cached_data, self.tick) {
-                (None, t) if t % 10 == 0 => {
-                    &win_info::get_window_data(&get_windows(self.window_id))
-                }
-                (Some(var), ..) => var,
-                _ => &win_info::get_window_data(&get_windows(self.window_id)),
-            };
-
             egui::ScrollArea::vertical().animated(false).show(ui, |ui| {
                 win_info::display(&window_data, ui, &cursor_pos, self.only_containing);
             });
         });
 
         ctx.request_repaint_after(Duration::from_millis(20));
-        self.tick = self.tick.overflowing_add(1).0;
+    }
+}
+
+/// Stores cached data that is updated after `REFRESH_AFTER` accesses.
+struct Cache<const REFRESH_AFTER: usize, T> {
+    cache: Option<T>,
+    accesses: usize,
+}
+
+// Manual impl because T doesn't require a Default impl.
+impl<const REFRESH_AFTER: usize, T> Default for Cache<REFRESH_AFTER, T> {
+    fn default() -> Self {
+        Self {
+            cache: Default::default(),
+            accesses: Default::default(),
+        }
+    }
+}
+
+impl<const REFRESH_AFTER: usize, T> Cache<REFRESH_AFTER, T> {
+    /// If the data needs to be updated the given function is called.
+    /// Otherwise the cached data is returned.
+    fn get<Func: FnMut() -> T>(&mut self, mut func: Func) -> &mut T {
+        if let (cache @ None, _) | (cache @ Some(_), true) =
+            (&mut self.cache, self.accesses >= REFRESH_AFTER)
+        {
+            self.accesses = 0;
+            *cache = Some(func());
+        }
+
+        self.accesses += 1;
+        self.cache.as_mut().unwrap()
     }
 }
