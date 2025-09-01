@@ -11,10 +11,11 @@ use windows::core::s;
 use windows::{Win32::Foundation::*, Win32::System::SystemServices::*};
 
 use crate::analyser::analyse;
-use crate::window::{Click, GetFound, get_windows, wait_for_window};
+use crate::window::{Click as _, GetFound, Text as _, get_windows, wait_for_window};
 
 const CREATE_GAME_MENU: &str = "(1)Create single or multiplayer game";
 const ADD_TEAM_MESSAGE: &str = "Left click a team to add it to the game. Right click to edit.";
+const ROUND_RESULTS_TEXT: &str = "(1) ROUND RESULTS";
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case, unused_variables)]
@@ -54,7 +55,7 @@ fn attach() {
         log::info!("Pressing: {id:?}");
 
         // Select multiplayer game
-        unsafe { id.click() };
+        id.click();
 
         let mut button = get_windows(window_id).get(0).get(38).get(1).value();
 
@@ -77,9 +78,40 @@ fn attach() {
         };
 
         add_teams(window_id, 2);
+
+        // Click on play button
+        log::debug!("Clicking play button");
+        get_windows(window_id)
+            .get(0)
+            .get(2)
+            .value()
+            .expect("Unable to find play button")
+            .click();
+
+        // Wait until button after match is shown
+        log::debug!("Waiting until round finishes");
+        let mut round_results = None;
+        while round_results.is_none() {
+            round_results = get_windows(window_id)
+                .get(0)
+                .get(5)
+                .value()
+                .filter(|found| found.text().contains(ROUND_RESULTS_TEXT));
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        log::debug!("Round finished");
+
+        // Exit the round over screen
+        get_windows(window_id)
+            .get(0)
+            .get(1)
+            .value()
+            .expect("Unable to get exit button")
+            .click();
     });
 }
 
+/// When on the round configuration, adds the given number of teams via using the mouse cursor.
 fn add_teams(armageddon_id: HWND, num_teams: u8) {
     // Gets the position of the bar under the window for mouse position
     let add_team = get_windows(armageddon_id)
@@ -123,21 +155,19 @@ fn add_teams(armageddon_id: HWND, num_teams: u8) {
             y_pos -= 2;
             mouse.move_to(x_middle, y_pos).expect("Able to move mouse");
 
-            let message_box = get_windows(armageddon_id)
+            let text = get_windows(armageddon_id)
                 .get(0)
                 .get(9)
                 .value()
-                .expect("Unable to get message box");
-
-            let mut window_text = [' ' as u8; 255];
-            unsafe { GetWindowTextA(message_box, &mut window_text) };
-            let text = String::from_utf8(window_text.to_vec()).expect("Unable to get window text");
+                .expect("Unable to get message box")
+                .text();
 
             if text.contains(ADD_TEAM_MESSAGE) {
                 mouse
                     .click_button(mouce::common::MouseButton::Left)
                     .expect("Able to click mouse button");
 
+                std::thread::sleep(Duration::from_millis(100)); // Otherwise it is too fast
                 break;
             }
         }

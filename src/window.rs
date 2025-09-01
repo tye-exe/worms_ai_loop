@@ -134,13 +134,39 @@ impl GetFound for Option<Found> {
     }
 }
 
+/// Provides a helper method to left click on a window.
 pub trait Click {
-    unsafe fn click(self);
+    /// Performs a left click on this window.
+    fn click(self);
 }
 
 impl Click for HWND {
-    unsafe fn click(self) {
+    fn click(self) {
+        // SAFETY, I'm passing the expected arguments to the function. The windows API docs did not mention any edge cases that i have to handle
         unsafe { SendMessageA(self, WM_LBUTTONDOWN, WPARAM(0 as usize), LPARAM(0isize)) };
         unsafe { SendMessageA(self, WM_LBUTTONUP, WPARAM(0 as usize), LPARAM(0isize)) };
+    }
+}
+
+/// Provides a helper method to get the text from a window.
+pub trait Text {
+    /// Gets the text attribute for this window.
+    /// This will return an empty string if the windows is not part of the current process.
+    fn text(self) -> String;
+}
+
+impl Text for HWND {
+    fn text(self) -> String {
+        use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextA, GetWindowTextLengthA};
+
+        let min_buff_len = unsafe { GetWindowTextLengthA(self) }.abs() /* It doesn't make sense for the text buffer to have a negative length */ as usize
+            + 1; // The given length is 1 indexed
+
+        let mut window_text = vec![0u8; min_buff_len];
+        unsafe { GetWindowTextA(self, window_text.as_mut_slice()) };
+        String::from_utf8(window_text.to_vec())
+            .expect("Unable to get window text")
+            .trim()
+            .to_owned()
     }
 }
