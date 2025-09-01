@@ -9,7 +9,13 @@ use windows::Win32::{
 };
 
 /// Display window information to a egui ui.
-pub(crate) fn display(data: &WinData, ui: &mut Ui, cursor_pos: &POINT, only_containing: bool) {
+pub(crate) fn display(
+    data: &WinData,
+    ui: &mut Ui,
+    cursor_pos: &POINT,
+    only_containing: bool,
+    show_extra_info: bool,
+) {
     let pos = data.info.rcWindow;
 
     // If window contains cursor
@@ -31,9 +37,9 @@ pub(crate) fn display(data: &WinData, ui: &mut Ui, cursor_pos: &POINT, only_cont
                 ui.label(format!("Name: '{}'", data.name));
                 ui.label(format!("Text: '{}'", data.text));
                 ui.label(format!("Path: '{:?}'", data.path));
-                // if self.show_info {
-                //     ui.label(format!("Info: {:#?}", data.info));
-                // }
+                if show_extra_info {
+                    ui.label(format!("Info: {:#?}", data.info));
+                }
             });
         })
         .response;
@@ -45,7 +51,7 @@ pub(crate) fn display(data: &WinData, ui: &mut Ui, cursor_pos: &POINT, only_cont
     ui.visuals_mut().override_text_color = None;
 
     for data in data.children.iter() {
-        display(&data, ui, cursor_pos, only_containing);
+        display(&data, ui, cursor_pos, only_containing, show_extra_info);
     }
 }
 

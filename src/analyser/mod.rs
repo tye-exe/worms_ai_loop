@@ -133,7 +133,13 @@ impl App for MyApp {
 
         CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().animated(false).show(ui, |ui| {
-                win_info::display(&window_data, ui, &cursor_pos, self.only_containing);
+                win_info::display(
+                    &window_data,
+                    ui,
+                    &cursor_pos,
+                    self.only_containing,
+                    self.show_info,
+                );
             });
         });
 
