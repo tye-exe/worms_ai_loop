@@ -94,6 +94,27 @@ impl WinData {
     pub(crate) fn add_child(&mut self, child: WinData) {
         self.children.push(child);
     }
+
+    pub fn last_child_containing(&self, cursor_pos: &POINT) -> Option<&WinData> {
+        let pos = self.info.rcWindow;
+
+        // If window does not contain cursor
+        if !(pos.bottom > cursor_pos.y
+            && pos.top < cursor_pos.y
+            && pos.left < cursor_pos.x
+            && pos.right > cursor_pos.x)
+        {
+            return None;
+        }
+
+        for data in self.children.iter() {
+            if let Some(contains) = data.last_child_containing(cursor_pos) {
+                return Some(contains);
+            };
+        }
+
+        return Some(self);
+    }
 }
 
 /// Gets the [`WinData`] for found and all child windows.

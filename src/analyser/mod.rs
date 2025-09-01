@@ -3,7 +3,7 @@ mod win_info;
 use super::window::get_windows;
 use crate::{analyser::win_info::WinData, attach};
 use eframe::{App, EventLoopBuilderHook};
-use egui::{CentralPanel, Id, Layout, TopBottomPanel};
+use egui::{CentralPanel, Id, Layout, SidePanel, TopBottomPanel};
 use std::{thread, time::Duration};
 use windows::{
     Win32::{
@@ -16,6 +16,9 @@ use windows::{
     core::s,
 };
 use winit::platform::windows::EventLoopBuilderExtWindows;
+
+/// The index of the keys pressed down to trigger logging info
+const LOG_INFO_KEYBIND: [usize; 5] = [16, 17, 65, 160, 162];
 
 pub fn analyse() {
     std::thread::spawn(|| {
@@ -56,6 +59,9 @@ struct MyApp {
     /// Window id of worms
     window_id: HWND,
 
+    /// Contains information about the window and mouse position when the keybind is pressed.
+    log: String,
+
     /// Only show the windows that contain the cursor.
     only_containing: bool,
     /// Show extra window information.
@@ -74,6 +80,7 @@ impl MyApp {
         Self {
             window_id,
             only_containing: true,
+            log: "Ctrl + Shift + A".to_owned(),
             ..Default::default()
         }
     }
@@ -89,26 +96,26 @@ impl App for MyApp {
             .window_data
             .get(|| win_info::get_window_data(&get_windows(self.window_id)));
 
-        if self.show_key_pressed {
-            let pressed = self.keyboard_state.get(|| {
-                let state = unsafe {
-                    let mut state = [0u8; 256];
-                    GetKeyboardState(&mut state);
-                    state
-                };
-
+        let pressed = self.keyboard_state.get(|| {
+            let state = unsafe {
+                let mut state = [0u8; 256];
+                GetKeyboardState(&mut state);
                 state
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, key)| {
-                        if *key & 0b1000_0000 == 0 {
-                            return None;
-                        }
-                        Some(index)
-                    })
-                    .collect()
-            });
+            };
 
+            state
+                .iter()
+                .enumerate()
+                .filter_map(|(index, key)| {
+                    if *key & 0b1000_0000 == 0 {
+                        return None;
+                    }
+                    Some(index)
+                })
+                .collect()
+        });
+
+        if self.show_key_pressed {
             if pressed.len() != 0 || self.key_index_modal {
                 self.key_index_modal = egui::Modal::new("grrr".into())
                     .show(ctx, |ui| {
@@ -118,11 +125,22 @@ impl App for MyApp {
             }
         }
 
+        if pressed.as_slice() == LOG_INFO_KEYBIND {
+            let info = window_data.last_child_containing(&cursor_pos).map(|data| {
+                format!(
+                    "Selected Text '{}'; Selected Path '{:?}';",
+                    data.text, data.path
+                )
+            });
+            self.log = format!("Information> {info:?} Mouse Position '{cursor_pos:?}';",)
+        }
+
         TopBottomPanel::top("tap").show(ctx, |ui| {
             ui.label(format!("Cursor Position: {cursor_pos:?}"));
 
             ui.checkbox(&mut self.only_containing, "Only Show Containing Cursor");
             ui.checkbox(&mut self.show_info, "Show Long Info");
+            ui.checkbox(&mut self.show_key_pressed, "Show Pressed Key Indexes");
 
             ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Spawn Mod").clicked() {
@@ -130,6 +148,8 @@ impl App for MyApp {
                 };
             })
         });
+
+        TopBottomPanel::bottom("battam").show(ctx, |ui| ui.label(&self.log));
 
         CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().animated(false).show(ui, |ui| {
