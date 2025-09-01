@@ -1,20 +1,20 @@
-mod window;
-
+use super::window::{Found, get_windows};
+use crate::attach;
 use eframe::{App, EventLoopBuilderHook};
-use egui::{CentralPanel, Color32, Id, TopBottomPanel};
+use egui::{CentralPanel, Color32, Id, Layout, TopBottomPanel};
 use std::{thread, time::Duration};
-use window::{get_windows, Found};
 use windows::{
-    core::s,
     Win32::{
         Foundation::{HWND, POINT},
         UI::WindowsAndMessaging::{
-            FindWindowA, GetClassLongA, GetClassNameA, GetCursorPos, GetWindowInfo, GetWindowTextA,
-            GetWindowTextW, RealGetWindowClassA, GET_CLASS_LONG_INDEX, WINDOWINFO,
+            FindWindowA, GET_CLASS_LONG_INDEX, GetClassLongA, GetClassNameA, GetCursorPos,
+            GetWindowInfo, GetWindowTextA, GetWindowTextW, RealGetWindowClassA, WINDOWINFO,
         },
     },
+    core::s,
 };
 use winit::platform::windows::EventLoopBuilderExtWindows;
+
 pub fn analyse() {
     std::thread::spawn(|| {
         std::thread::sleep(Duration::from_secs(1));
@@ -58,6 +58,9 @@ struct MyApp {
     only_containing: bool,
     /// Show extra window information.
     show_info: bool,
+
+    cached_data: Option<Found>,
+    tick: usize,
 }
 
 impl MyApp {
@@ -67,6 +70,8 @@ impl MyApp {
             id: 1,
             only_containing: true,
             show_info: false,
+            cached_data: None,
+            tick: 0,
         }
     }
 
@@ -91,12 +96,23 @@ impl App for MyApp {
 
             ui.checkbox(&mut self.only_containing, "Only Show Containing Cursor");
             ui.checkbox(&mut self.show_info, "Show Long Info");
+
+            ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Spawn Mod").clicked() {
+                    attach();
+                };
+            })
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            let windows = get_windows(self.window_id);
+            let found = match (&self.cached_data, self.tick) {
+                (None, t) if t % 10 == 0 => &get_windows(self.window_id),
+                (Some(var), ..) => var,
+                _ => &get_windows(self.window_id),
+            };
+
             egui::ScrollArea::vertical().animated(false).show(ui, |ui| {
-                for_windows(&windows, 0, 0, &mut |data, tree_position| {
+                for_windows(found, 0, 0, Vec::default(), &mut |data, tree_position| {
                     let pos = data.info.rcWindow;
 
                     // If window contains cursor
@@ -117,10 +133,11 @@ impl App for MyApp {
                             ui.vertical(|ui| {
                                 ui.label(format!("Name: '{}'", data.name));
                                 ui.label(format!("Text: '{}'", data.text));
-                                ui.label(format!(
-                                    "Depth: {}, Index: {}",
-                                    tree_position.depth, tree_position.index
-                                ));
+                                ui.label(format!("Path: '{:?}'", tree_position.path));
+                                // ui.label(format!(
+                                //     "Depth: {}, Index: {}",
+                                //     tree_position.depth, tree_position.index
+                                // ));
                                 //ui.label(format!("Real Class: '{}'", data.w_type));
                                 //ui.label(format!("Atom: '{}'", data.atom));
                                 if self.show_info {
@@ -139,7 +156,9 @@ impl App for MyApp {
             });
         });
 
-        ctx.request_repaint_after(Duration::from_millis(50));
+        ctx.request_repaint_after(Duration::from_millis(20));
+        //ctx.request_repaint();
+        self.tick = self.tick.overflowing_add(1).0;
     }
 }
 
@@ -155,6 +174,7 @@ struct WindowData<'a> {
 struct Position {
     pub depth: usize,
     pub index: usize,
+    pub path: Vec<usize>,
 }
 
 /// Executes the callback for each window that has been found.
@@ -164,6 +184,7 @@ fn for_windows(
     found: &Found,
     depth: usize,
     index: usize,
+    path: Vec<usize>,
     callback: &mut impl FnMut(WindowData, Position) -> (),
 ) {
     let id = found.value();
@@ -192,11 +213,24 @@ fn for_windows(
             info,
             atom,
         },
-        Position { depth, index },
+        Position {
+            depth,
+            index,
+            path: path.clone(),
+        },
     );
 
     for (index, child) in found.children().iter().enumerate() {
-        for_windows(child, depth + 1, index, callback);
+        for_windows(
+            child,
+            depth + 1,
+            index,
+            {
+                let mut path = path.clone();
+                path.push(index);
+                path
+            },
+            callback,
+        );
     }
 }
-

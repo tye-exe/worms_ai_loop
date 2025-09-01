@@ -1,1 +1,5 @@
 /target
+.vscode
+
+# Install specific build script
+build.cmd

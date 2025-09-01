@@ -1,6 +1,6 @@
 use windows::{
     Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxA},
-    core::{PCSTR, s},
+    core::PCSTR,
 };
 
 const LOG_FILE: &str = "worms_ai_loop.log";

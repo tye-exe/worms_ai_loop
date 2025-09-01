@@ -2,20 +2,19 @@ mod analyser;
 mod init;
 mod window;
 
-use std::os::raw::c_void;
+use mouce::{Mouse, MouseActions as _};
 use std::time::Duration;
-use windows::Win32::UI::Input::KeyboardAndMouse::{VK_OEM_1, VK_RETURN};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowA, FindWindowExA, GetClassNameA, GetWindowTextA, SendMessageA, WM_KEYDOWN, WM_KEYUP,
-    WM_LBUTTONDOWN, WM_LBUTTONUP,
+    FindWindowA, GetWindowRect, GetWindowTextA, SendMessageA, WHEEL_DELTA, WM_MOUSEWHEEL,
 };
 use windows::core::s;
 use windows::{Win32::Foundation::*, Win32::System::SystemServices::*};
 
 use crate::analyser::analyse;
-use crate::window::{get_windows, log_child_windows, wait_for_window};
+use crate::window::{Click, GetFound, get_windows, wait_for_window};
 
 const CREATE_GAME_MENU: &str = "(1)Create single or multiplayer game";
+const ADD_TEAM_MESSAGE: &str = "Left click a team to add it to the game. Right click to edit.";
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case, unused_variables)]
@@ -40,30 +39,107 @@ fn attach() {
             .expect("Unable to find `Worms Armageddon` window");
         log::info!("Window ID: {window_id:?}");
 
-        log_child_windows(window_id);
-
         let id = wait_for_window(window_id, |windows| {
-            windows
-                .into_iter()
-                .filter(|id| {
-                    // Read window text into buffer
-                    let mut window_text = [' ' as u8; 255];
-                    unsafe { GetWindowTextA(*id, &mut window_text) };
-                    let text = String::from_utf8(window_text.to_vec())
-                        .expect("Unable to get window title");
+            windows.filter(|id| {
+                // Read window text into buffer
+                let mut window_text = [' ' as u8; 255];
+                unsafe { GetWindowTextA(*id, &mut window_text) };
+                let text =
+                    String::from_utf8(window_text.to_vec()).expect("Unable to get window title");
 
-                    text.starts_with(CREATE_GAME_MENU)
-                })
-                .next()
+                text.starts_with(CREATE_GAME_MENU)
+            })
         });
 
         log::info!("Pressing: {id:?}");
 
-        unsafe { SendMessageA(id, WM_LBUTTONDOWN, WPARAM(0 as usize), LPARAM(0isize)) };
-        unsafe { SendMessageA(id, WM_LBUTTONUP, WPARAM(0 as usize), LPARAM(0isize)) };
+        // Select multiplayer game
+        unsafe { id.click() };
 
-        // Dept 2, index 38 for team scroll
+        let mut button = get_windows(window_id).get(0).get(38).get(1).value();
 
-        log_child_windows(window_id);
+        while button.is_none() {
+            button = get_windows(window_id).get(0).get(38).get(1).value();
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        let button = button.unwrap();
+        log::info!("found button");
+
+        // Scroll to bottom of the teams list
+        unsafe {
+            SendMessageA(
+                button,
+                WM_MOUSEWHEEL,
+                // The multiplier controls the scroll strength
+                WPARAM(((WHEEL_DELTA as i64 * -5) << 16) as usize),
+                LPARAM(0isize),
+            )
+        };
+
+        add_teams(window_id, 2);
     });
+}
+
+fn add_teams(armageddon_id: HWND, num_teams: u8) {
+    // Gets the position of the bar under the window for mouse position
+    let add_team = get_windows(armageddon_id)
+        .get(0)
+        .get(35)
+        .value()
+        .expect("Unable to get add teams button");
+
+    let mut place = RECT::default();
+    unsafe {
+        GetWindowRect(add_team, &mut place as *mut RECT).expect("Able to get window position");
+    }
+
+    let x_middle = place.left + ((place.right - place.left) / 2);
+    let mut y_pos = place.top;
+    let mouse = Mouse::new();
+    let mut previous_position: Option<(i32, i32)> = None;
+
+    mouse.move_to(x_middle, y_pos).expect("Able to move mouse");
+
+    for _ in 0..num_teams {
+        loop {
+            // Check if mouse moved manually
+            {
+                if let Some(prev_pos) = previous_position
+                    && prev_pos.1 - 2
+                        != mouse
+                            .get_position()
+                            .expect("Unable to get mouse position")
+                            .1
+                {
+                    log::info!("Manual mouse movement detected; sleeping");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+
+                previous_position =
+                    Some(mouse.get_position().expect("Unable to get mouse position"));
+            }
+
+            // Move mouse until the mouse is over a team
+            y_pos -= 2;
+            mouse.move_to(x_middle, y_pos).expect("Able to move mouse");
+
+            let message_box = get_windows(armageddon_id)
+                .get(0)
+                .get(9)
+                .value()
+                .expect("Unable to get message box");
+
+            let mut window_text = [' ' as u8; 255];
+            unsafe { GetWindowTextA(message_box, &mut window_text) };
+            let text = String::from_utf8(window_text.to_vec()).expect("Unable to get window text");
+
+            if text.contains(ADD_TEAM_MESSAGE) {
+                mouse
+                    .click_button(mouce::common::MouseButton::Left)
+                    .expect("Able to click mouse button");
+
+                break;
+            }
+        }
+    }
 }

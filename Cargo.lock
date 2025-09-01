@@ -1094,6 +1094,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
 name = "glow"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1510,6 +1516,16 @@ checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
  "simd-adler32",
+]
+
+[[package]]
+name = "mouce"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ffe1e3e71e33fd3e4ef4a3552a7e79bcc4ab3c30cb93b5c8d801ba55f6819e"
+dependencies = [
+ "glob",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3480,6 +3496,7 @@ dependencies = [
  "eframe",
  "egui",
  "log",
+ "mouce",
  "simple-logging",
  "windows",
  "winit",
